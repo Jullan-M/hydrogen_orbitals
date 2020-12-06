@@ -90,7 +90,7 @@ class Transition:
         ax.text(1.5e-9, -2e-9, r"$@ \mathfrak{J}\textrm{ullan\_M}$", fontsize=20, c="white")
 
         def animate(i):
-            if i > self.waits[0][0] and i <= self.waits[0][1]:
+            if self.waits and i > self.waits[0][0] and i <= self.waits[0][1]:
                 if i == self.waits[0][1]:
                     self.waits.pop(0)
                 return
@@ -103,7 +103,7 @@ class Transition:
         anim.save("transition.mp4", writer=writer, dpi=120, progress_callback=lambda i, n: print(f'{i} out of {n}.', end="\r"))
 
 class Orbital_3D:
-    def __init__(self, n: int, l: int, m: int, x : np.array = np.linspace(-1.5e-9, 1.5e-9, 201)):
+    def __init__(self, n: int, l: int, m: int, x : np.array = np.linspace(-2e-9, 2e-9, 201)):
         self.n, self.l, self.m = n, l, m
         self.x = x
         self.dx = x[1]-x[0]
@@ -118,16 +118,24 @@ class Orbital_3D:
         self.psi = self.psi / np.sqrt(norm2)
 
     def snapshot(self):
-        # Check this https://stackoverflow.com/questions/32725710/randomly-fill-a-3d-grid-according-to-a-probability-density-function-px-y-z
+        # Initiate figure and gridspec
         fig = plt.figure()
         gs = fig.add_gridspec(3,4, left=0, bottom=0, right=1, top=1, wspace=0, hspace=0)
+        
         ax_3d = fig.add_subplot(gs[:, :3], projection='3d')
+        axs = [fig.add_subplot(gs[k, 3]) for k in range(3)]
+        
+        # Aesthetic configuration
+        ax_3d.set_facecolor('black') 
+        ax_3d.grid(False) 
+        ax_3d.w_xaxis.pane.fill = False
+        ax_3d.w_yaxis.pane.fill = False
+        ax_3d.w_zaxis.pane.fill = False
+
         ax_3d.set_title(r"$\left | n, l, m \right \rangle = \left |" + f"{self.n}, {self.l}, {self.m} " + r"\right \rangle$", y=0.9, color="w")
         ax_3d.set_xlim3d(self.x[0], self.x[-1])
         ax_3d.set_ylim3d(self.x[0], self.x[-1])
         ax_3d.set_zlim3d(self.x[0], self.x[-1])
-
-        axs = [fig.add_subplot(gs[k, 3]) for k in range(3)]
 
         xi, yi, zi = self.xyz.ravel(), self.yxz.ravel(), self.zxy.ravel()
 
@@ -135,15 +143,7 @@ class Orbital_3D:
         randices = np.random.choice(np.arange(xi.shape[0]), 2000, replace = False, p = self.prob.ravel())
         
         # Random positions:
-        x_rand, y_rand, z_rand = xi[randices], yi[randices], zi[randices]
-        
-        
-        ax_3d.set_facecolor('black') 
-        ax_3d.grid(False) 
-        ax_3d.w_xaxis.pane.fill = False
-        ax_3d.w_yaxis.pane.fill = False
-        ax_3d.w_zaxis.pane.fill = False
-        
+        x_rand, y_rand, z_rand = xi[randices], yi[randices], zi[randices]        
         
         vmin, vmax = self.prob.min(), self.prob.max() / 6
         ax_3d.scatter(x_rand, y_rand, z_rand, c=self.prob.ravel()[randices], cmap=cm.get_cmap("magma"), vmin = vmin, vmax = vmax, alpha=0.25)
@@ -177,37 +177,95 @@ class Transition_3D:
         t = np.linspace(0, np.pi/2, frames)
         c1 = np.cos(t)
         c2 = np.sin(t)
-        superpos = np.einsum("i,kj->ikj", c1, self.orb.psi) + np.einsum("i,kj->ikj", c2, orb2.psi)
+        superpos = np.einsum("i,kjl->ikjl", c1, self.orb.psi) + np.einsum("i,kjl->ikjl", c2, orb2.psi)
         prob_dens = superpos.real**2 + superpos.imag**2
         
         self.prob_t.extend(prob_dens)
         self.tot_frames += frames
         self.orb = orb2
 
-    def save(self):
+    def wait(self, duration):
+        frames = duration * self.fps
+        
+        self.prob_t.extend(frames*[self.orb.prob])
+        self.waits.append((self.tot_frames, self.tot_frames + frames))
+        self.tot_frames += frames
 
-        fig, ax = plt.subplots()
-        fig.set_size_inches(9, 9, True)
-        fig.subplots_adjust(left=0, bottom=0, right=1, top=1, wspace=None, hspace=None)
-        ax.set_axis_off()
-        ax.contourf(self.orb.x, self.orb.x, self.prob_t[0], cmap=cm.get_cmap("magma"), levels = np.linspace(0, self.prob_t[0].max()/8, 101))
-        ax.text(1.5e-9, -2e-9, r"$@ \mathfrak{J}\textrm{ullan\_M}$", fontsize=20, c="white")
+    def save(self):
+        orb = self.orb
+        samples = 2000
+
+        # Initiate figure and gridspec
+        fig = plt.figure()
+        gs = fig.add_gridspec(3,4, left=0, bottom=0, right=1, top=1, wspace=0, hspace=0)
+        
+        ax_3d = fig.add_subplot(gs[:, :3], projection='3d')
+        axs = [fig.add_subplot(gs[k, 3]) for k in range(3)]
+        # Aesthetic configuration
+        ax_3d.view_init(15, -45)
+        ax_3d.set_facecolor('black') 
+        ax_3d.w_xaxis.pane.fill = False
+        ax_3d.w_yaxis.pane.fill = False
+        ax_3d.w_zaxis.pane.fill = False
+
+        def ax3d_update(ax_3d):
+            # This has to be updated every frame on the animation since we clear the frame on each iteration.
+            # Ugh...
+            ax_3d.set_axis_off()
+            
+            # TODO: Have to make a function that updates |nlm> based on time.
+            #ax_3d.set_title(r"$\left | n, l, m \right \rangle = \left |" + f"{orb.n}, {orb.l}, {orb.m} " + r"\right \rangle$", y=0.9, color="w")
+            ax_3d.set_xlim3d(orb.x[0], orb.x[-1])
+            ax_3d.set_ylim3d(orb.x[0], orb.x[-1])
+            ax_3d.set_zlim3d(orb.x[0], orb.x[-1])
+        
+        ax3d_update(ax_3d)
+        xi, yi, zi = orb.xyz.ravel(), orb.yxz.ravel(), orb.zxy.ravel()     
+        
+        vmin, vmax = self.prob_t[0].min(), self.prob_t[0].max() / 6
+        levels = np.linspace(vmin, vmax, 101)
+        for ax, coord, slic in zip(axs, ("$xy$-plane", "$xz$-plane", "$yz$-plane"), (self.prob_t[0][:, :, 100], self.prob_t[0][:, 100, :], self.prob_t[0][100, :, :])):
+            ax.set_axis_off()
+            ax.set_title(coord, y=0.025, color="w")
+            ax.contourf(orb.x, orb.x, slic.T, cmap=cm.get_cmap("magma"), levels = levels)
+
+        axs[2].text(1.5e-9, -1.5e-9, r"$@ \mathfrak{J}\textrm{ullan\_M}$", fontsize=16, c="white")
 
         def animate(i):
-            if i > self.waits[0][0] and i <= self.waits[0][1]:
+            ax_3d.clear()
+            ax3d_update(ax_3d)
+            # Obtain indices of randomly selected points, as specified by probability density.
+            randices = np.random.choice(np.arange(xi.shape[0]), samples, replace = False, p = self.prob_t[i].ravel())
+            
+            # Random positions:
+            x_rand, y_rand, z_rand = xi[randices], yi[randices], zi[randices]
+            vmin, vmax = self.prob_t[i].min(), self.prob_t[i].max() / 6
+
+            ax_3d.scatter(x_rand, y_rand, z_rand, s=16, c=self.prob_t[i].ravel()[randices], cmap=cm.get_cmap("magma"), vmin = vmin, vmax = vmax, alpha=0.3)
+            ax_3d.text2D(0.05, 0.025, r"$@ \mathfrak{J}\textrm{ullan\_M}$", fontsize=16, c="white", transform=ax_3d.transAxes)
+            
+            if self.waits and i > self.waits[0][0] and i <= self.waits[0][1]:
                 if i == self.waits[0][1]:
                     self.waits.pop(0)
-                return
-            ax.clear()
-            ax.contourf(self.orb.x, self.orb.x, self.prob_t[i], cmap=cm.get_cmap("magma"), levels = np.linspace(0, self.prob_t[i].max()/8, 101))
-            ax.text(1.5e-9, -2e-9, r"$@ \mathfrak{J}\textrm{ullan\_M}$", fontsize=20, c="white")
+            else:
+                levels = np.linspace(vmin, vmax, 101)
+                for ax, coord, slic in zip(axs, ("$xy$-plane", "$xz$-plane", "$yz$-plane") ,(self.prob_t[i][:, :, 100], self.prob_t[i][:, 100, :], self.prob_t[i][100, :, :])):
+                    ax.clear()
+                    ax.set_title(coord, y=0.025, color="w")
+                    ax.contourf(orb.x, orb.x, slic.T, cmap=cm.get_cmap("magma"), levels = levels)
+                
 
         writer = animation.FFMpegWriter(self.fps, 'libx264', bitrate=4000)
         anim = animation.FuncAnimation(fig, animate, repeat=False, frames=self.tot_frames, interval=1000 / self.fps, blit=False)
-        anim.save("transition.mp4", writer=writer, dpi=120, progress_callback=lambda i, n: print(f'{i} out of {n}.', end="\r"))
+        anim.save("transition.mp4", writer=writer, dpi=225, progress_callback=lambda i, n: print(f'{i} out of {n}.', end="\r"))
 
-orb = Orbital_3D(2,1,1)
-orb.snapshot()
+orb = Orbital_3D(4,1,0)
+#orb.snapshot()
+
+tr_3d = Transition_3D(orb, fps=10)
+tr_3d.transition((4,2,0))
+tr_3d.save()
+
 
 '''
 orb = Orbital(5,0,0)
