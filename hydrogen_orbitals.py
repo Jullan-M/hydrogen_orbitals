@@ -5,10 +5,11 @@ from matplotlib import pyplot as plt
 from matplotlib import animation
 from matplotlib import cm as cm
 from matplotlib import colors as colors
-from matplotlib import rc
-rc('font', **{'family': 'serif', 'serif': ['Computer Modern Roman']})
-rc('text', usetex=True)
-rc('text.latex', preamble=r'\usepackage{eufrak}')
+# Uncomment the following to enable Latex text rendering
+#from matplotlib import rc
+#rc('font', **{'family': 'serif', 'serif': ['Computer Modern Roman']})
+#rc('text', usetex=True)
+#rc('text.latex', preamble=r'\usepackage{eufrak}')
 
 a = 0.529e-10
 
@@ -166,7 +167,7 @@ class Orbital_3D:
 
 
 class Transition_3D:
-    def __init__(self, orb : Orbital_3D, fps : int = 60):
+    def __init__(self, orb : Orbital_3D, fps : int = 30):
         self.fps = fps
         self.orb = orb
         self.prob_t = []
@@ -288,11 +289,11 @@ class Transition_3D:
         anim.save("transition.mp4", writer=writer, dpi=180, progress_callback=lambda i, n: print(f'{i} out of {n}.', end="\r"))
 
 
-orb = Orbital_3D(1,0,0)
+orb = Orbital_3D(1,0,0) # Initial orbital to be transitioned from with quantum numbers n,l,m=1,0,0
 #orb.snapshot()
-tr_3d = Transition_3D(orb, fps=60)
-tr_3d.wait(1.2)
-tr_3d.transition((2,1,0), duration=0.8)
+tr_3d = Transition_3D(orb, fps=30) # Initialize Transition object that handles the animation from state to state.
+tr_3d.wait(1.2) # Wait for 1.2 seconds in the animation in (1,0,0)
+tr_3d.transition((2,1,0), duration=0.8) # Transition from (1,0,0) to (2,1,0) in the duration of 1 second
 tr_3d.wait(1.2)
 tr_3d.transition((2,1,1), duration=0.8)
 tr_3d.wait(1.2)
@@ -310,4 +311,4 @@ tr_3d.transition((4,3,1), duration=0.8)
 tr_3d.wait(1.2)
 tr_3d.transition((4,1,0), duration=0.8)
 tr_3d.wait(1.2)
-tr_3d.save()
+tr_3d.save() # Actually save the animation after every operation is done
